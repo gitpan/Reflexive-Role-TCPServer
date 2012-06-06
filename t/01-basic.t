@@ -2,6 +2,7 @@ use warnings;
 use strict;
 use Test::More;
 use POSIX qw(:errno_h);
+use Test::TCP;
 
 BEGIN
 {
@@ -29,7 +30,7 @@ BEGIN
     {
 		my ($self, $args) = @_;
 
-        Test::More::is($args->{data}, "TSET\n", 'got the right data from the server');
+        Test::More::is($args->octets, "TSET\n", 'got the right data from the server');
 		# Disconnect after we receive the echo.
 		$self->stop();
         $self->server->shutdown();
@@ -53,19 +54,14 @@ BEGIN
         (
             \@_,
             { isa => 'MyTCPServer' },
-            {
-                isa => Dict
-                [
-                    data => Any,
-                    _sender => Object
-                ]
-            },
+            { isa => 'Reflexive::Event::Data' },
         );
-
-        Test::More::is($args->{data}, "TEST\n", 'got the right data from client');
-        chomp($args->{data});
+        
+        my $data = $args->data;
+        Test::More::is($data, "TEST\n", 'got the right data from client');
+        chomp($data);
         Test::More::diag('Sending reversed echo back to client');
-        $args->{_sender}->get_first_emitter()->put(reverse($args->{data})."\n");
+        $args->get_first_emitter()->put(reverse($data)."\n");
     }
 
     with 'Reflexive::Role::TCPServer';
@@ -116,14 +112,7 @@ BEGIN
             \@_,
             { isa => CodeRef },
             { does => 'Reflexive::Role::TCPServer' },
-            {
-                isa => Dict
-                [
-                    errnum => Num,
-                    errstr => Str,
-                    errfun => Str
-                ]
-            },
+            { isa => 'Reflex::Event::Error' },
         );
 
         if($args->{errfun} eq 'bind')
@@ -141,8 +130,10 @@ BEGIN
     };
 }
 
-my $server = MyTCPServer->new();
-my $client = MyTCPClient->new(port => $server->port, server => $server);
+my $port = Test::TCP::empty_port();
+
+my $server = MyTCPServer->new(port => $port);
+my $client = MyTCPClient->new(port => $port, server => $server);
 
 Reflex->run_all();
 

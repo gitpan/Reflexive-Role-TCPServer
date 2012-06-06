@@ -8,10 +8,13 @@ build_requires:
   Reflex::Base: 0
   Reflex::Client: 0
   Test::More: 0
+  Test::TCP: 0
+  strict: 0
+  warnings: 0
 configure_requires:
-  ExtUtils::MakeMaker: 6.31
+  ExtUtils::MakeMaker: 6.30
 dynamic_config: 0
-generated_by: 'Dist::Zilla version 4.102341, CPAN::Meta::Converter version 2.102400'
+generated_by: 'Dist::Zilla version 4.300014, CPAN::Meta::Converter version 2.120921'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -32,4 +35,4 @@ requires:
   Try::Tiny: 0
 resources:
   repository: git://nickandperla.net/reflexive-role-tcpserver.git
-version: 1.110100
+version: 1.121580

@@ -1,6 +1,6 @@
 package Reflexive::Role::TCPServer;
-BEGIN {
-  $Reflexive::Role::TCPServer::VERSION = '1.110100';
+{
+  $Reflexive::Role::TCPServer::VERSION = '1.121580';
 }
 
 #ABSTRACT: Provides a consumable Reflex-based multiplexing TCP server behavior
@@ -66,7 +66,7 @@ role
         writer => '_set_host',
     );
 
-
+    
     has listener =>
     (
         is          => 'ro',
@@ -75,6 +75,14 @@ role
         clearer     => 'clear_listener',
         predicate   => 'has_listener',
         builder     => '_build_listener',
+    );
+
+
+    has listener_active =>
+    (
+        is => 'rw',
+        isa => Bool,
+        default => 1,
     );
 
 
@@ -104,31 +112,8 @@ role
     sub _count_sockets {}
     sub _clear_sockets {}
     sub _all_sockets {}
-
-    with 'Reflex::Role::Accepting' =>
-    {
-        listener      => 'listener',
-        method_pause  => 'pause_listening',
-        method_resume => 'resume_listening',
-        method_stop   => 'stop_listening',
-    };
-
-    with 'Reflexive::Role::Collective' =>
-    {
-        stored_constraint => role_type('Reflex::Role::Collectible'),
-        watched_events =>
-        [
-            [ stopped   => ['emit_socket_stop',     'socket_stop' ] ],
-            [ error     => ['emit_socket_error',    'socket_error'] ],
-            [ data      => ['emit_socket_data',     'socket_data' ] ],
-        ],
-        method_remember         => 'store_socket',
-        method_forget           => 'remove_socket',
-        method_clear_objects    => '_clear_sockets',
-        method_count_objects    => '_count_sockets',
-        method_add_object       => '_set_socket',
-        method_del_object       => '_delete_socket',
-    };
+    sub listener {}
+    sub listener_active {}
 
 
     method _build_listener => sub
@@ -182,11 +167,12 @@ role
         {
             $self->on_listener_error
             (
-                {
-                    errstr => "$!",
-                    errnum => ($! + 0),
-                    errfun => 'bind',
-                }
+                Reflex::Event::Error->new(
+                    _emitters => [$self],
+                    string => "$!",
+                    number => ($! + 0),
+                    function => 'bind',
+                )
             );
         }
     };
@@ -226,10 +212,10 @@ role
         (
             \@_,
             { does => 'Reflexive::Role::TCPServer' },
-            { isa => Dict[peer => Str, socket => FileHandle] },
+            { isa => 'Reflex::Event::Socket' },
         );
 
-        $self->store_socket($self->_build_socket($args->{socket}));
+        $self->store_socket($self->_build_socket($args->handle()));
 
     };
 
@@ -240,19 +226,12 @@ role
         (
             \@_,
             { does => 'Reflexive::Role::TCPServer' },
-            {
-                isa => Dict
-                [
-                    errnum => Num,
-                    errstr => Str,
-                    errfun => Str
-                ]
-            },
+            { isa => 'Reflex::Event::Error' },
         );
 
-        die "Failed to ${\$args->{errfun}}. " .
-            "Error Code: ${\$args->{errnum}} " .
-            "Error Message: ${\$args->{errstr}}";
+        die "Failed to ${\$args->function}. " .
+            "Error Code: ${\$args->number} " .
+            "Error Message: ${\$args->string}";
     };
 
 
@@ -262,13 +241,13 @@ role
         (
             \@_,
             { does => 'Reflexive::Role::TCPServer' },
-            { args => Dict[_sender => Object] },
+            { isa  => 'Reflex::Event' },
         );
 
         # This is a solid assumption that the socket will be the source of the
         # event and therefore it will be first in the Reflex _sender stack
 
-        $self->remove_socket($args->{_sender}->get_first_emitter());
+        $self->remove_socket($args->get_first_emitter());
     };
 
 
@@ -278,21 +257,13 @@ role
         (
             \@_,
             { does => 'Reflexive::Role::TCPServer' },
-            {
-                isa => Dict
-                [
-                    _sender => Object,
-                    errnum => Num,
-                    errstr => Str,
-                    errfun => Str
-                ]
-            },
+            { isa => 'Reflex::Event::Error' },
         );
 
         # This is a solid assumption that the socket will be the source of the
         # error and therefore it will be first in the Reflex _sender stack
 
-        $self->remove_socket($args->{_sender}->get_first_emitter());
+        $self->remove_socket($args->get_first_emitter());
     };
 
 
@@ -301,7 +272,34 @@ role
         my $self = shift;
         $self->stop_listening();
         $_->stopped() for $self->_all_sockets();
-    }
+    };
+
+    with 'Reflex::Role::Accepting' =>
+    {
+        att_active      => 'listener_active',
+        att_listener    => 'listener',
+        method_pause    => 'pause_listening',
+        method_resume   => 'resume_listening',
+        method_stop     => 'stop_listening',
+    };
+
+    with 'Reflexive::Role::Collective' =>
+    {
+        stored_constraint => role_type('Reflex::Role::Collectible'),
+        watched_events =>
+        [
+            [ stopped   => ['emit_socket_stop',     'socket_stop' ] ],
+            [ error     => ['emit_socket_error',    'socket_error'] ],
+            [ data      => ['emit_socket_data',     'socket_data' ] ],
+        ],
+        method_remember         => 'store_socket',
+        method_forget           => 'remove_socket',
+        method_clear_objects    => '_clear_sockets',
+        method_count_objects    => '_count_sockets',
+        method_add_object       => '_set_socket',
+        method_del_object       => '_delete_socket',
+    };
+
 };
 
 1;
@@ -315,7 +313,7 @@ Reflexive::Role::TCPServer - Provides a consumable Reflex-based multiplexing TCP
 
 =head1 VERSION
 
-version 1.110100
+version 1.121580
 
 =head1 SYNOPSIS
 
@@ -334,16 +332,10 @@ version 1.110100
             (
                 \@_,
                 { isa => 'MyTCPServer' },
-                {
-                    isa => Dict
-                    [
-                        data => Any,
-                        _sender => Object
-                    ]
-                },
+                { isa => 'Reflexive::Event::Data' },
             );
-            my $data = $args->{data};
-            my $socket = $args->{_sender}->get_first_emitter();
+            my $data = $args->data;
+            my $socket = $args->get_first_emitter();
             warn "Received data ($data) from socket ($socket)";
             chomp($data);
             # look at Reflex::Role::Streaming for what methods are available
@@ -435,6 +427,15 @@ to 0.0.0.0 (which means all available interfaces/addresses).
 listener holds the listening socket from which to accept connections. Ideally,
 this attribute shouldn't be touched in consuming classes
 
+=head2 listener_active
+
+    is: ro, isa: Bool, default: 1
+
+listener_active determines the default state of the listener socket upon
+creation of the object. It defaults to true which means that when the object is
+built and handed off to POE, it will immediately select() over it. If this
+behavior is not desired, simply set this to false at construction.
+
 =head2 sockets
 
     is: ro, isa: HashRef, traits: Hash
@@ -494,7 +495,7 @@ capture of exceptions on binding if they occur.
 
 =head2 on_listener_accept
 
-    (Dict[peer => Str, socket => FileHandle])
+    (Reflex::Event::Socket)
 
 on_listener_accept is the callback method called when a socket connection has
 been accepted. It calls L</_build_socket> and stores the result using
@@ -503,14 +504,14 @@ role.
 
 =head2 on_listener_error
 
-    (Dict[errnum => Num, errstr => Str, errfun => Str])
+    (Reflex::Event::Error)
 
 on_listener_error is the callback called when there is an error on the
 listening socket.
 
 =head2 on_socket_stop
 
-    (Dict[_sender => Object])
+    (Reflex::Event)
 
 on_socket_stop is the callback method fired when sockets close. It calls
 L<Reflexive::Role::Collective/forget>, which is named "remove_socket" in this
@@ -519,7 +520,7 @@ the first emitter.
 
 =head2 on_socket_error
 
-    (Dict[_sender => Object, errnum => Num, errstr => Str, errfun => Str])
+    (Reflex::Event::Error)
 
 on_socket_error is the callback fired when a socket encounters an error. The
 socket that sent the event will be the first emitter. This method merely
@@ -531,7 +532,7 @@ Nicholas R. Perez <nperez@cpan.org>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2010 by Nicholas R. Perez <nperez@cpan.org>.
+This software is copyright (c) 2012 by Nicholas R. Perez <nperez@cpan.org>.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.

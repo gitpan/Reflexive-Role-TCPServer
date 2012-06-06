@@ -18,19 +18,13 @@
         (
             \@_,
             { isa => 'MyTCPServer' },
-            {
-                isa => Dict
-                [
-                    data => Any,
-                    _sender => Object,
-                ]
-            },
+            { isa => 'Reflexive::Event::Data' },
         );
-        my $data = $args->{data};
-        my $socket = $args->{_sender}->get_first_emitter();
+        my $data = $args->data;
+        my $socket = $args->get_first_emitter();
         warn "Received data ($data) from socket ($socket)";
         chomp($data);
-        # look at Reflex::Role::Streaming for what methods are available
+        # look at Reflex::Stream for what methods are available
         $socket->put(reverse($data)."\n");
     }
 
@@ -47,17 +41,10 @@
             \@_,
             { isa => CodeRef },
             { does => 'Reflexive::Role::TCPServer' },
-            {
-                isa => Dict
-                [
-                    errnum => Num,
-                    errstr => Str,
-                    errfun => Str
-                ]
-            },
+            { isa => 'Reflex::Event::Error' },
         );
 
-        if($args->{errfun} eq 'bind')
+        if($args->function eq 'bind')
         {
             warn 'Failed to bind, attempting again';
             $self->_set_port($self->port + 1);
@@ -83,13 +70,7 @@
         (
             \@_,
             { isa => 'MyTCPServer' },
-            {
-                isa => Dict
-                [
-                    peer => Str,
-                    socket => FileHandle,
-                ]
-            }
+            { isa => 'Reflex::Event::Socket' },
         );
 
         my($port, $addr) = sockaddr_in($args->{peer});
@@ -105,14 +86,13 @@
         (
             \@_,
             { isa => 'MyTCPServer' },
-            { isa => Dict[_sender => Object] },
+            { isa => 'Reflex::Event' },
         );
 
-        warn 'Closing socket: ' . $args->{_sender}->get_first_emitter();
+        warn 'Closing socket: ' . $args->get_first_emitter();
 
     }
 }
 
 my $server = MyTCPServer->new();
 $server->run_all();
-
