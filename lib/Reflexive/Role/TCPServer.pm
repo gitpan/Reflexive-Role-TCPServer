@@ -1,6 +1,6 @@
 package Reflexive::Role::TCPServer;
 {
-  $Reflexive::Role::TCPServer::VERSION = '1.121580';
+  $Reflexive::Role::TCPServer::VERSION = '1.140030';
 }
 
 #ABSTRACT: Provides a consumable Reflex-based multiplexing TCP server behavior
@@ -16,6 +16,9 @@ use Reflexive::Stream::Filtering;
 use Reflex::Callbacks('cb_method');
 use Try::Tiny;
 
+
+
+attribute_parameter 'reflex_stream_class' => 'Reflexive::Stream::Filtering';
 
 
 attribute_parameter 'input_filter_class' => 'POE::Filter::Stream';
@@ -40,6 +43,7 @@ parameter output_filter_args =>
 role
 {
     my $p = shift;
+    my $reflex_stream_class = $p->reflex_stream_class;
     my $input_filter_class = $p->input_filter_class;
     my $output_filter_class = $p->output_filter_class;
     my %input_filter_args = %{$p->input_filter_args};
@@ -145,7 +149,7 @@ role
             { isa => FileHandle },
         );
 
-        return Reflexive::Stream::Filtering->new
+        return $reflex_stream_class->new
         (
             handle => $handle,
             input_filter => $input_filter_class->new(%input_filter_args),
@@ -244,9 +248,6 @@ role
             { isa  => 'Reflex::Event' },
         );
 
-        # This is a solid assumption that the socket will be the source of the
-        # event and therefore it will be first in the Reflex _sender stack
-
         $self->remove_socket($args->get_first_emitter());
     };
 
@@ -259,9 +260,6 @@ role
             { does => 'Reflexive::Role::TCPServer' },
             { isa => 'Reflex::Event::Error' },
         );
-
-        # This is a solid assumption that the socket will be the source of the
-        # error and therefore it will be first in the Reflex _sender stack
 
         $self->remove_socket($args->get_first_emitter());
     };
@@ -313,7 +311,7 @@ Reflexive::Role::TCPServer - Provides a consumable Reflex-based multiplexing TCP
 
 =head1 VERSION
 
-version 1.121580
+version 1.140030
 
 =head1 SYNOPSIS
 
@@ -361,6 +359,12 @@ detailed than the synopsis.
 
 =head1 ROLE_PARAMETERS
 
+=head2 reflex_stream_class
+
+This is the name of the class to use when constructing a stream. It should
+conform to (or better, subclass) L<Reflexive::Stream::Filtering>. By default,
+L<Reflexive::Stream::Filtering> objects are instantiated
+
 =head2 input_filter_class
 
 This is the name of the class to use when constructing an input filter for each
@@ -391,12 +395,15 @@ here as a HashRef
 
 =head2 on_socket_data
 
-    Dict[data => Any, _sender => Object]
+    (Reflexive::Event::Data)
 
 This role requires the method on_socket_data to be implemented in the consuming
-class prior to application. The inbound, filtered data will be available in the
-HashRef under the key 'data'. The socket that generated the event will be
-available via L<Reflex::Sender/get_first_emitter> on the _sender object.
+class.
+
+The only argument to this method will be a L<Reflexive::Event::Data> object.
+The socket that generated the event will be available via
+L<Reflex::Event/get_first_emitter>. The filtered data will be available via
+L<Reflexive::Event::Data/data>
 
 =head1 PUBLIC_ATTRIBUTES
 
@@ -532,7 +539,7 @@ Nicholas R. Perez <nperez@cpan.org>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2012 by Nicholas R. Perez <nperez@cpan.org>.
+This software is copyright (c) 2013 by Nicholas R. Perez <nperez@cpan.org>.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.

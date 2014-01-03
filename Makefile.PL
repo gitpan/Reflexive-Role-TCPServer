@@ -42,7 +42,7 @@ my %WriteMakefileArgs = (
     "Reflexive::Stream::Filtering" => 0,
     "Try::Tiny" => 0
   },
-  "VERSION" => "1.121580",
+  "VERSION" => "1.140030",
   "test" => {
     "TESTS" => "t/*.t"
   }
